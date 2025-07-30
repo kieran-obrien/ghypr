@@ -14,7 +14,6 @@ class GhibliThemeSwitcher(App):
         """Create child widgets for the app."""
         yield Header()
         yield ListView(*self.movies)
-        yield ListView(ThemeListItem("test_name", ["#ff6b6b", "#4ecdc4", "#ffe66d"]))
         yield Footer()
         
     def on_mount(self) -> None:
@@ -32,18 +31,18 @@ class ThemeListItem(ListItem):
         super().__init__()
         self.theme_name = theme_name
         self.theme_colours = theme_colours
+        self.styles.height = 3
     
     def _on_mount(self):
-        self.mount(Horizontal(Label(self.theme_name.capitalize()), create_color_preview(self.theme_colours)))
+        self.mount(Horizontal(Label(self.theme_name.capitalize()), create_color_preview_squares(self.theme_colours)))
 
-def create_color_preview(colors):
-    print(colors)
+def create_color_preview_squares(colors):
     squares = []
     for c in colors:
-        square = Static("")             # create the widget
-        square.styles.background = c    # set background color
-        square.styles.width = 2         # set width
-        square.styles.height = 1        # set height
+        square = Static("")          
+        square.styles.background = c
+        square.styles.width = 2        
+        square.styles.height = 1  
         squares.append(square)
     return Horizontal(*squares)
   
@@ -53,7 +52,7 @@ def main():
         raise FileNotFoundError(f"Config directory not found: {config_path}")
 
     themes = sorted([p.name for p in config_path.iterdir() if p.is_dir()])
-    movies = [ListItem(Label(name.capitalize())) for name in themes]
+    movies = [ThemeListItem(name.capitalize(), ["#ff6b6b", "#4ecdc4", "#ffe66d"]) for name in themes]
     
     app = GhibliThemeSwitcher(movies)
     app.run()
