@@ -1,6 +1,7 @@
 import httpx
 import asyncio
 import json
+import subprocess
 from textual import work
 from textual.app import App, ComposeResult
 from textual.screen import Screen
@@ -41,9 +42,21 @@ class GhibliThemeSwitcher(App):
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "download":
-            self.push_screen(DownloadScreen())
+            self.push_screen(ThemeDownloadScreen())
         elif event.button.id == "manifest":
             self.push_screen(UpdateManifestProgressScreen())
+            
+    def on_list_view_selected(self, event: ListView.Selected):
+        list_item = event.item  
+        self.apply_theme(list_item.theme_name.lower())
+        
+    def apply_theme(self, theme_name):
+        wallpaper_path = Path.home() / ".config" / "ghypr" / theme_name / f"{theme_name}-wallpaper.jpg"
+        
+        subprocess.run(["hyprctl", "hyprpaper", "unload", "all"], check=True)
+        subprocess.run(["hyprctl", "hyprpaper", "preload", str(wallpaper_path)], check=True)
+        subprocess.run(["hyprctl", "hyprpaper", "wallpaper", f",{wallpaper_path}"], check=True)
+
             
     def refresh_theme_list(self):
         theme_names = sorted([p.name for p in self.config_path.iterdir() if p.is_dir()])
@@ -101,7 +114,7 @@ class ManifestLoaderScreen(Screen):
         if event.button.id == "ok":
             self.app.pop_screen()
             
-class DownloadScreen(Screen):   
+class ThemeDownloadScreen(Screen):   
     def __init__(self):
         super().__init__()
         
@@ -117,15 +130,15 @@ class DownloadScreen(Screen):
         if event.button.id == "back":
             self.app.pop_screen()  # go back to main screen
         elif event.button.id == "start":
-            self.app.push_screen(DownloadProgressScreen(self.query_one(SelectionList).selected))
+            self.app.push_screen(ThemeDownloadProgressScreen(self.query_one(SelectionList).selected))
             
-class DownloadProgressScreen(Screen):
+class ThemeDownloadProgressScreen(Screen):
     def __init__(self, themes_selection):
         super().__init__()
         self.themes = themes_selection
         
     def compose(self) -> ComposeResult:
-        self.progress = ProgressBar(total=len(self.themes))
+        self.progress = ProgressBar(total=len(self.themes) * 2)
         self.ok_button = Button("OK", id="ok", disabled=True)
         yield Label("Downloading...")
         yield Label(str(self.themes))
@@ -133,17 +146,23 @@ class DownloadProgressScreen(Screen):
         yield self.ok_button
         
     def on_mount(self):
-        self.call_later(self.start_downloads)  # schedule async task right after mount
+        self.call_later(self.download_themes)  # schedule async task right after mount
 
     @work(exclusive=True)       
-    async def start_downloads(self):        
-        color_urls = [url for name in self.themes for url in (self.app.manifest["themes"][name]["colors_conf"], self.app.manifest["themes"][name]["colors_css"])]
+    async def download_themes(self):        
+        color_urls = [url for movie_name in self.themes for url in (self.app.manifest["themes"][movie_name]["colors_conf"], self.app.manifest["themes"][movie_name]["colors_css"])]
                        
         async with httpx.AsyncClient(timeout=None) as client:
             for url in color_urls:
                 save_path = Path.home() / ".config" / "ghypr" / url.split("/")[-1].split(".")[0] / url.split("/")[-1]
                 save_path.parent.mkdir(parents=True, exist_ok=True)
                 await download_file(client, url, save_path)
+                self.progress.advance(1)
+            for movie_name in self.themes:
+                save_path = Path.home() / ".config" / "ghypr" / movie_name / f"{movie_name}-wallpaper.jpg"
+                save_path.parent.mkdir(parents=True, exist_ok=True)
+                wallpaper_url = self.app.manifest["themes"][movie_name]["wallpaper"]
+                await download_file(client, wallpaper_url, save_path)
                 self.progress.advance(1)
         
         self.app.refresh_theme_list()
@@ -197,7 +216,7 @@ class ThemeListItem(ListItem):
         super().__init__()
         self.theme_name = theme_name
         self.theme_colours = theme_colours
-        self.styles.height = 3
+        self.styles.height = 3\
     
     def on_mount(self):
         self.mount(Horizontal(Label(self.theme_name.capitalize()), create_color_preview_squares(self.theme_colours)))
