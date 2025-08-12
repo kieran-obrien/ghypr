@@ -6,10 +6,12 @@ from textual.screen import Screen
 from textual.containers import Horizontal
 from textual.widgets import Footer, Button, Static, Label, ListItem, ListView, Header, SelectionList, ProgressBar
 from textual.widgets.selection_list import Selection
-import re
 from pathlib import Path
 from screens.manifest_loader import ManifestLoaderScreen
 from screens.update_manifest import UpdateManifestProgressScreen
+from utils.get_theme_colours_from_css import get_theme_colours_from_css
+from utils.create_colour_preview_squares import create_color_preview_squares
+from utils.download_file import download_file
 
 class GhibliThemeSwitcher(App):
     BINDINGS = [("d", "toggle_dark", "Toggle dark mode")]
@@ -138,28 +140,8 @@ class ThemeListItem(ListItem):
     def on_mount(self):
         self.mount(Horizontal(Label(self.theme_name.capitalize()), create_color_preview_squares(self.theme_colours)))
 
-async def download_file(client, url, save_path: Path):
-    """Download a file asynchronously using httpx."""
-    async with client.stream("GET", url, follow_redirects=True) as response:
-        response.raise_for_status()
-        with open(save_path, "wb") as f:
-            async for chunk in response.aiter_bytes():
-                f.write(chunk)   
  
-def create_color_preview_squares(colors):
-    squares = []
-    for c in colors:
-        square = Static("")          
-        square.styles.background = c
-        square.styles.width = 2        
-        square.styles.height = 1  
-        squares.append(square)
-    return Horizontal(*squares)
+
     
-def get_theme_colours_from_css(config_path, theme_name):
-    css_path = config_path / theme_name / f"{theme_name}.css"
-    css_raw_text = css_path.read_text()
-    color_pattern_regex = r"#(?:[0-9a-fA-F]{3,4}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})\b"
-    theme_colors = re.findall(color_pattern_regex, css_raw_text)
-    return theme_colors
+
         
