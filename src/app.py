@@ -12,6 +12,7 @@ from screens.update_manifest import UpdateManifestProgressScreen
 from utils.get_theme_colours_from_css import get_theme_colours_from_css
 from utils.create_colour_preview_squares import create_color_preview_squares
 from utils.download_file import download_file
+from widgets.theme_list_item import ThemeListItem
 
 class GhibliThemeSwitcher(App):
     BINDINGS = [("d", "toggle_dark", "Toggle dark mode")]
@@ -129,16 +130,6 @@ class ThemeDownloadProgressScreen(Screen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.app.pop_screen() # go back to download screen
         self.app.pop_screen() # go back to main screen
-          
-class ThemeListItem(ListItem):
-    def __init__(self, theme_name, theme_colours):
-        super().__init__()
-        self.theme_name = theme_name
-        self.theme_colours = theme_colours
-        self.styles.height = 3
-    
-    def on_mount(self):
-        self.mount(Horizontal(Label(self.theme_name.capitalize()), create_color_preview_squares(self.theme_colours)))
 
  
 
