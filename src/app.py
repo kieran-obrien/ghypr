@@ -1,15 +1,15 @@
 import httpx
-import asyncio
-import json
 import subprocess
 from textual import work
 from textual.app import App, ComposeResult
 from textual.screen import Screen
-from textual.containers import Horizontal, HorizontalGroup, VerticalScroll
+from textual.containers import Horizontal
 from textual.widgets import Footer, Button, Static, Label, ListItem, ListView, Header, SelectionList, ProgressBar
 from textual.widgets.selection_list import Selection
 import re
 from pathlib import Path
+from screens.manifest_loader import ManifestLoaderScreen
+from screens.update_manifest import UpdateManifestProgressScreen
 
 class GhibliThemeSwitcher(App):
     BINDINGS = [("d", "toggle_dark", "Toggle dark mode")]
@@ -42,7 +42,7 @@ class GhibliThemeSwitcher(App):
     
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "download":
-            self.push_screen(ThemeDownloadScreen())
+            self.push_screen(ThemeDownloadSelectionScreen())
         elif event.button.id == "manifest":
             self.push_screen(UpdateManifestProgressScreen())
             
@@ -68,53 +68,8 @@ class GhibliThemeSwitcher(App):
         self.query_one(Label).update("")
         if not theme_names:
             self.query_one(Label).update("No themes installed!")
-                                
-class ManifestLoaderScreen(Screen):
-    def __init__(self):
-        super().__init__()
-        self.ok_button = Button("OK", id="ok")
-        
-    def compose(self) -> ComposeResult:
-        yield Header()
-        yield Label("Loading theme manifest from .config/ghypr")
-        yield self.ok_button
-        yield Footer()
-        
-    def on_mount(self):
-        self.call_later(self.check_manifest)  # schedule async task right after mount
-     
-    @work(exclusive=True)    
-    async def check_manifest(self):
-        manifest_path = Path.home() / ".config" / "ghypr" / "manifest.json"
-        manifest_path.parent.mkdir(parents=True, exist_ok=True)
-        manifest_url = "https://raw.githubusercontent.com/kieran-obrien/ghypr-assets/main/manifest.json"
-
-        try:
-            if not manifest_path.exists():
-                self.query_one(Label).update("Manifest not found. Downloading...")
-                async with httpx.AsyncClient(timeout=None) as client:
-                    res = await client.get(manifest_url)
-                    res.raise_for_status()
-
-                    tmp_path = manifest_path.with_suffix(".tmp")
-                    tmp_path.write_bytes(res.content)
-                    tmp_path.replace(manifest_path)
-                    self.app.manifest = res.json()
-                    
-            else:
-                self.app.manifest = json.loads(manifest_path.read_text())
-
-            self.query_one(Label).update("Manifest check complete! Click OK to continue.")
-        except Exception as e:
-            self.query_one(Label).update(f"[red]Failed to load manifest: {e}[/red]")
-
-        self.ok_button.disabled = False
-        
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "ok":
-            self.app.pop_screen()
-            
-class ThemeDownloadScreen(Screen):   
+                                           
+class ThemeDownloadSelectionScreen(Screen):   
     def __init__(self):
         super().__init__()
         
@@ -172,51 +127,13 @@ class ThemeDownloadProgressScreen(Screen):
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.app.pop_screen() # go back to download screen
         self.app.pop_screen() # go back to main screen
-
-class UpdateManifestProgressScreen(Screen):
-    def __init__(self):
-        super().__init__()
-        
-    def compose(self) -> ComposeResult:
-        self.progress = ProgressBar(total=100)
-        self.ok_button = Button("OK", id="ok", disabled=True)
-        yield Label("Updating theme manifest...")
-        yield self.progress
-        yield self.ok_button
-        
-    def on_mount(self):
-        self.call_later(self.update_manifest)  # schedule async task right after mount
-
-    @work(exclusive=True)       
-    async def update_manifest(self):                              
-        manifest_path = Path.home() / ".config" / "ghypr" / "manifest.json"
-        manifest_path.parent.mkdir(parents=True, exist_ok=True)
-        manifest_url = "https://raw.githubusercontent.com/kieran-obrien/ghypr-assets/main/manifest.json"
-
-        try:
-            async with httpx.AsyncClient(timeout=None) as client:
-                res = await client.get(manifest_url)
-                res.raise_for_status()
-
-                tmp_path = manifest_path.with_suffix(".tmp")
-                tmp_path.write_bytes(res.content)
-                tmp_path.replace(manifest_path)
-                self.app.manifest = res.json()
-                self.progress.advance(100)
-                self.query_one(Label).update("Manifest update complete! Click OK to continue.")
-        except Exception as e:
-            self.query_one(Label).update(f"[red]Failed to update manifest: {e}[/red]")
-        self.ok_button.disabled = False
-        
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        self.app.pop_screen() # go back to main screen
-           
+          
 class ThemeListItem(ListItem):
     def __init__(self, theme_name, theme_colours):
         super().__init__()
         self.theme_name = theme_name
         self.theme_colours = theme_colours
-        self.styles.height = 3\
+        self.styles.height = 3
     
     def on_mount(self):
         self.mount(Horizontal(Label(self.theme_name.capitalize()), create_color_preview_squares(self.theme_colours)))
@@ -246,9 +163,3 @@ def get_theme_colours_from_css(config_path, theme_name):
     theme_colors = re.findall(color_pattern_regex, css_raw_text)
     return theme_colors
         
-def main():
-    app = GhibliThemeSwitcher()
-    app.run()
-    
-if __name__ == "__main__":
-    main()
